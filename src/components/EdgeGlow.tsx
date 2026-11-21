@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react'
 
 type Side = 'top' | 'right' | 'bottom' | 'left'
 const SIDES: Side[] = ['top', 'right', 'bottom', 'left']
-const PERIOD_MS = 7000
 
 /**
  * A gold light that travels around the screen edge, like the reference. Pure CSS look, not tied to audio.
@@ -12,7 +11,8 @@ const PERIOD_MS = 7000
  * Now each edge is a thin strip with a small "comet" that slides along it; the comet is handed
  * from edge to edge so it reads as one light circling the screen. Only transforms animate.
  */
-export function EdgeGlow() {
+export function EdgeGlow({ lapSeconds = 7, length = 0.09 }: { lapSeconds?: number; /** share of the perimeter */ length?: number }) {
+  const PERIOD_MS = lapSeconds * 1000
   const refs = useRef<Record<Side, HTMLElement | null>>({ top: null, right: null, bottom: null, left: null })
 
   useEffect(() => {
@@ -22,8 +22,8 @@ export function EdgeGlow() {
       anims.forEach((a) => a.cancel())
       const W = window.innerWidth
       const H = window.innerHeight
-      const L = Math.round(0.3 * Math.min(W, H) + 120) // comet length
       const P = 2 * W + 2 * H
+      const L = Math.max(40, Math.round(length * P)) // comet length
       const v = P / PERIOD_MS
       // Distance along the perimeter where the comet's head enters each side (clockwise from top-left).
       const lengths: Record<Side, number> = { top: W, right: H, bottom: W, left: H }
@@ -71,7 +71,7 @@ export function EdgeGlow() {
       window.removeEventListener('resize', setup)
       anims.forEach((a) => a.cancel())
     }
-  }, [])
+  }, [PERIOD_MS, length])
 
   return (
     <div className="edge-glow" aria-hidden>

@@ -263,12 +263,12 @@ button {
   z-index: 2;
 }
 .clock-date {
-  font-size: clamp(16px, 1.7vw, 24px);
+  font-size: calc(clamp(16px, 1.7vw, 24px) * var(--clock-scale, 1));
   letter-spacing: 0.02em;
   color: rgba(255, 226, 205, 0.78);
 }
 .clock-time {
-  font-size: clamp(76px, 11.5vw, 168px);
+  font-size: calc(clamp(76px, 11.5vw, 168px) * var(--clock-scale, 1));
   font-style: italic;
   line-height: 0.95;
   letter-spacing: -0.02em;
@@ -621,6 +621,7 @@ button {
 .cover-art {
   position: absolute;
   inset: -4%;
+  opacity: var(--art-opacity, 1);
   will-change: transform;
   animation:
     cover-in 1.6s ease both,
@@ -659,7 +660,7 @@ button {
   mask-mode: luminance;
   mask-size: cover;
   mask-position: center;
-  opacity: 0.55;
+  opacity: calc(0.55 * var(--specks-boost, 1));
   animation: spray-shimmer 4s ease-in-out infinite alternate;
 }
 .spray-noise {
@@ -678,7 +679,7 @@ button {
 }
 @keyframes spray-shimmer {
   to {
-    opacity: 0.4;
+    opacity: calc(0.4 * var(--specks-boost, 1));
   }
 }
 
@@ -695,7 +696,7 @@ button {
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='d'><feTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='1' seed='4'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 0.5  0 0 0 0 0.15  0 0 0 9 -6.3'/></filter><rect width='100%' height='100%' filter='url(%23d)'/></svg>"),
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='d'><feTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='1' seed='11'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 0.7  0 0 0 0 0.35  0 0 0 11 -8.1'/></filter><rect width='100%' height='100%' filter='url(%23d)'/></svg>");
   background-size: 300px;
-  opacity: 0.6;
+  opacity: calc(0.6 * var(--specks-boost, 1));
   will-change: transform;
   animation: dust-drift 45s linear infinite;
 }
@@ -721,6 +722,15 @@ button {
   from {
     opacity: 0;
   }
+}
+.cover-glow.no-glow {
+  background: radial-gradient(ellipse at 50% 50%, transparent 35%, rgba(3, 1, 0, 0.8) 100%);
+}
+/* speck strength: wrapper fades 0..1, --specks-boost (>1) pushes the inner layers harder */
+.specks {
+  position: absolute;
+  inset: 0;
+  opacity: var(--specks, 1);
 }
 @keyframes cover-drift {
   to {
@@ -1027,4 +1037,53 @@ button {
 .stage.lyrics-mode .bg {
   visibility: hidden;
   transition: visibility 0s linear 1s;
+}
+
+/* ---------- settings panel ---------- */
+.panel.settings {
+  width: min(350px, calc(100vw - 44px));
+  gap: 6px;
+}
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 0 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.settings-section h3 {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+.settings-section .switch-row,
+.settings-section .setting-row {
+  border-top: 0;
+  padding-top: 0;
+}
+.slider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 12.5px;
+}
+.slider-row.disabled {
+  opacity: 0.4;
+}
+.slider-head {
+  display: flex;
+  justify-content: space-between;
+}
+.slider-value {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.65;
+}
+.slider-row .range {
+  width: 100%;
+}
+.pill.reset {
+  align-self: flex-start;
+  margin-top: 6px;
 }

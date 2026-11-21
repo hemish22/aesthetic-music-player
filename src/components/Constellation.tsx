@@ -7,6 +7,13 @@ interface Props {
   getPosition: () => number
   font: 'sans' | 'serif'
   colors: LyricColors
+  /** px size of words not being sung */
+  wordSize: number
+  /** px size of the word being sung */
+  activeSize: number
+  /** 0..1.5 glow strength */
+  glow: number
+  linesPerGroup: number
 }
 
 interface Node {
@@ -22,11 +29,7 @@ interface Graph {
   edges: [number, number][]
 }
 
-const LINES_PER_GROUP = 2
 const FADE_MS = 700
-/** Lyric text sizes in px: words already sung / coming, and the word being sung. */
-const WORD_PX = 27
-const ACTIVE_PX = 43
 
 function mulberry32(seed: number) {
   let a = seed >>> 0
@@ -40,9 +43,9 @@ function mulberry32(seed: number) {
 }
 
 /** Deterministic layout for a group of lines, so seeking always reproduces the same constellation. */
-function buildGraph(lyrics: Lyrics, group: number): Graph {
+function buildGraph(lyrics: Lyrics, group: number, linesPerGroup: number): Graph {
   const rand = mulberry32(group * 7919 + 13)
-  const words = lyrics.lines.slice(group * LINES_PER_GROUP, (group + 1) * LINES_PER_GROUP).flatMap((l) => l.words)
+  const words = lyrics.lines.slice(group * linesPerGroup, (group + 1) * linesPerGroup).flatMap((l) => l.words)
   const n = words.length
   const nodes: Node[] = []
   const edges: [number, number][] = []
@@ -72,12 +75,17 @@ function sparkle(ctx: CanvasRenderingContext2D, x: number, y: number, s: number)
 }
 
 /** Lyrics drawn as a star map: each sung word becomes a glowing node linked to its neighbours. */
-export function Constellation({ lyrics, getPosition, font, colors }: Props) {
+export function Constellation({ lyrics, getPosition, font, colors, wordSize, activeSize, glow, linesPerGroup }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fontRef = useRef(font)
   useEffect(() => {
     fontRef.current = font
   }, [font])
+  // Live-tunable values read every frame (no canvas rebuild when sliders move).
+  const look = useRef({ wordSize, activeSize, glow })
+  useEffect(() => {
+    look.current = { wordSize, activeSize, glow }
+  }, [wordSize, activeSize, glow])
   const colorsRef = useRef(colors)
   useEffect(() => {
     colorsRef.current = colors
@@ -106,7 +114,7 @@ export function Constellation({ lyrics, getPosition, font, colors }: Props) {
     const graphFor = (g: number) => {
       let graph = graphs.get(g)
       if (!graph && lyrics) {
-        graph = buildGraph(lyrics, g)
+        graph = buildGraph(lyrics, g, linesPerGroup)
         graphs.set(g, graph)
       }
       return graph
@@ -189,7 +197,8 @@ export function Constellation({ lyrics, getPosition, font, colors }: Props) {
           ctx.stroke()
         }
 
-        const size = WORD_PX + (ACTIVE_PX - WORD_PX) * active
+        const { wordSize: wpx, activeSize: apx, glow: gl } = look.current
+        const size = wpx + (apx - wpx) * active
         ctx.font = sans ? `${active > 0.5 ? 700 : 600} ${size}px Inter, system-ui, sans-serif` : `italic ${size + 2}px "Instrument Serif", Georgia, serif`
         ctx.textAlign = 'center'
         ctx.textBaseline = 'top'
@@ -199,19 +208,23 @@ export function Constellation({ lyrics, getPosition, font, colors }: Props) {
 
         // 1. Soft colored bloom spreading out from the word.
         ctx.shadowColor = rgba(edge, 0.95)
-        ctx.shadowBlur = 16 + 26 * active
-        ctx.fillStyle = rgba(edge, a * (0.3 + 0.25 * active))
-        ctx.fillText(n.word, x, ty)
+        if (gl > 0) {
+          ctx.shadowBlur = (16 + 26 * active) * gl
+          ctx.fillStyle = rgba(edge, a * Math.min(1, (0.3 + 0.25 * active) * gl))
+          ctx.fillText(n.word, x, ty)
+        }
 
         // 2. Thin bright rim tracing the letter edges.
-        ctx.shadowBlur = 5 + 6 * active
-        ctx.lineJoin = 'round'
-        ctx.lineWidth = 1.4 + 1.2 * active
-        ctx.strokeStyle = rgba(cur.ray, a * (0.35 + 0.4 * active))
-        ctx.strokeText(n.word, x, ty)
+        if (gl > 0) {
+          ctx.shadowBlur = (5 + 6 * active) * gl
+          ctx.lineJoin = 'round'
+          ctx.lineWidth = 1.4 + 1.2 * active
+          ctx.strokeStyle = rgba(cur.ray, a * Math.min(1, (0.35 + 0.4 * active) * gl))
+          ctx.strokeText(n.word, x, ty)
+        }
 
         // 3. The word itself, crisp on top.
-        ctx.shadowBlur = 4 + 8 * active
+        ctx.shadowBlur = (4 + 8 * active) * gl
         ctx.shadowColor = rgba(edge, 0.7)
         const mix = cur.word.map((v, i) => v + (cur.active[i] - v) * active) as RGB
         ctx.fillStyle = rgba(mix, a * (0.7 + 0.3 * active))
@@ -227,7 +240,7 @@ export function Constellation({ lyrics, getPosition, font, colors }: Props) {
         const pos = getPosition()
         const { line } = locate(lyrics, pos)
         if (line >= 0) {
-          const group = Math.floor(line / LINES_PER_GROUP)
+          const group = Math.floor(line / linesPerGroup)
           if (group !== shown) {
             previous = shown
             shown = group
@@ -249,7 +262,7 @@ export function Constellation({ lyrics, getPosition, font, colors }: Props) {
       cancelAnimationFrame(raf)
       ro.disconnect()
     }
-  }, [lyrics, getPosition])
+  }, [lyrics, getPosition, linesPerGroup])
 
   return <canvas ref={canvasRef} className="constellation" />
 }

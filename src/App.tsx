@@ -10,19 +10,22 @@ import { Icon } from './components/icons'
 import { MiniTransport } from './components/MiniTransport'
 import { CursorGlow } from './components/Cursor'
 import { GlassPlayer } from './components/GlassPlayer'
+import { SettingsPanel } from './components/SettingsPanel'
 import { SourcePicker } from './components/SourcePicker'
 import { Waiting } from './components/Waiting'
 import { usePalette } from './hooks/usePalette'
 import { usePlayer } from './hooks/usePlayer'
 import { handleRedirect, isLoggedIn, login } from './auth/spotify'
-import { lyricColors, type LyricColorMode } from './lyrics/colors'
+import { lyricColors } from './lyrics/colors'
 import { fetchLyrics, type Lyrics } from './lyrics/lrclib'
 import { DemoSource, demoLyrics } from './sources/demo'
 import { LocalSource } from './sources/local'
 import { SpotifySource } from './sources/spotify'
 import type { PlayerSource } from './sources/types'
+import { useSettings } from './settings'
 
 type View = 'now' | 'lyrics'
+type Panel = 'controls' | 'settings' | null
 
 const isDemo = new URLSearchParams(window.location.search).has('demo')
 const startView: View = new URLSearchParams(window.location.search).get('view') === 'lyrics' ? 'lyrics' : 'now'
@@ -30,20 +33,18 @@ const startView: View = new URLSearchParams(window.location.search).get('view') 
 export default function App() {
   const [source, setSource] = useState<PlayerSource | null>(() => (isDemo ? new DemoSource() : null))
   const [view, setView] = useState<View>(startView)
-  const [font, setFont] = useState<'sans' | 'serif'>('sans')
+  const [settings, updateSettings, resetSettings] = useSettings()
   const [lyrics, setLyrics] = useState<Lyrics | null>(isDemo ? demoLyrics : null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loggedIn, setLoggedIn] = useState(isLoggedIn())
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [panelOpen, setPanelOpen] = useState(false)
-  const [showMini, setShowMini] = useState(() => localStorage.getItem('mini-controls') !== 'off')
-  const [lyricColor, setLyricColor] = useState<LyricColorMode>(() => (localStorage.getItem('lyric-color') === 'match' ? 'match' : 'contrast'))
+  const [panel, setPanel] = useState<Panel>(null)
 
   const player = usePlayer(source)
   const { track } = player
   const palette = usePalette(track?.artUrl ?? null)
-  const colors = useMemo(() => lyricColors(palette.hue, palette.colorless, lyricColor), [palette, lyricColor])
+  const colors = useMemo(() => lyricColors(palette.hue, palette.colorless, settings.lyricColor), [palette, settings.lyricColor])
 
   const connectSpotify = useCallback(async () => {
     setBusy(true)
@@ -126,17 +127,10 @@ export default function App() {
   }, [])
 
 
-  const changeShowMini = useCallback((on: boolean) => {
-    setShowMini(on)
-    localStorage.setItem('mini-controls', on ? 'on' : 'off')
-  }, [])
-  const closePanel = useCallback(() => setPanelOpen(false), [])
-  const changeLyricColor = useCallback((mode: LyricColorMode) => {
-    setLyricColor(mode)
-    localStorage.setItem('lyric-color', mode)
-  }, [])
+  const closePanel = useCallback(() => setPanel(null), [])
+  const togglePanel = useCallback((p: Exclude<Panel, null>) => setPanel((cur) => (cur === p ? null : p)), [])
 
-  // Keyboard: space = play/pause, L = lyrics view, F = fullscreen, C = controls, [ ] = nudge lyrics.
+  // Keyboard: space = play/pause, L = lyrics view, F = fullscreen, C = controls, S = settings, [ ] = nudge lyrics.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return
@@ -147,11 +141,12 @@ export default function App() {
       else if (e.key === ']') nudge(250)
       else if (e.key === 'l') setView((v) => (v === 'now' ? 'lyrics' : 'now'))
       else if (e.key === 'f') toggleFullscreen()
-      else if (e.key === 'c') setPanelOpen((o) => !o)
+      else if (e.key === 'c') togglePanel('controls')
+      else if (e.key === 's') togglePanel('settings')
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [source, nudge, toggleFullscreen])
+  }, [source, nudge, toggleFullscreen, togglePanel])
 
   const vars = useMemo(() => ({ '--c1': palette.c1, '--c2': palette.c2, '--c3': palette.c3 }) as CSSProperties, [palette])
   useEffect(() => {
@@ -169,10 +164,20 @@ export default function App() {
       }}
     >
       <Background />
-      <CoverBackdrop artUrl={track?.artUrl ?? null} active={view === 'lyrics'} c1={palette.c1} c2={palette.c2} />
-      <EdgeGlow />
-      <CursorGlow />
-      <Clock />
+      <CoverBackdrop
+        artUrl={track?.artUrl ?? null}
+        active={view === 'lyrics'}
+        c1={palette.c1}
+        c2={palette.c2}
+        artOpacity={settings.coverOpacity}
+        softFocus={settings.coverSoftFocus}
+        specks={settings.specks}
+        scratches={settings.scratches}
+        glow={settings.coverGlow}
+      />
+      {settings.edgeGlow && <EdgeGlow lapSeconds={settings.edgeSpeed} length={settings.edgeLength} />}
+      {settings.cursorGlow && <CursorGlow />}
+      <Clock showTime={settings.showTime} showDate={settings.showDate} hour12={settings.hour12} scale={settings.clockSize} />
 
       {!source ? (
         <SourcePicker loggedIn={loggedIn} busy={busy} error={error} onSpotify={() => (loggedIn ? connectSpotify() : login())} onFiles={addFiles} />
@@ -186,19 +191,24 @@ export default function App() {
           </section>
 
           <section className={`view view-lyrics ${view === 'lyrics' ? 'on' : ''}`}>
-            <Constellation lyrics={lyrics} getPosition={getPosition} font={font} colors={colors} />
+            <Constellation
+              lyrics={lyrics}
+              getPosition={getPosition}
+              font={settings.lyricFont}
+              colors={colors}
+              wordSize={settings.wordSize}
+              activeSize={settings.activeSize}
+              glow={settings.lyricGlow}
+              linesPerGroup={settings.linesPerGroup}
+            />
             {lyrics === null && <p className="no-lyrics">no synced lyrics for this track</p>}
           </section>
-          {view === 'lyrics' && showMini && <MiniTransport source={source} isPlaying={player.isPlaying} />}
-          {panelOpen && (
-            <ControlPanel source={source} state={player} onClose={closePanel} showMini={showMini} onShowMini={changeShowMini}
-              lyricColor={lyricColor}
-              onLyricColor={changeLyricColor}
-            />
-          )}
+          {view === 'lyrics' && settings.miniControls && <MiniTransport source={source} isPlaying={player.isPlaying} />}
+          {panel === 'controls' && <ControlPanel source={source} state={player} onClose={closePanel} />}
           {toast && <div className="toast">{toast}</div>}
         </>
       )}
+      {panel === 'settings' && <SettingsPanel settings={settings} update={updateSettings} reset={resetSettings} onClose={closePanel} />}
       <div className="dock">
         {track && view === 'lyrics' && track.artUrl && (
           <button className="dock-thumb" onClick={() => setView('now')} aria-label="Back to player">
@@ -207,20 +217,34 @@ export default function App() {
         )}
         {track && (
           <button
-            className={`dock-btn ${panelOpen ? 'active' : ''}`}
-            onClick={() => setPanelOpen((o) => !o)}
+            className={`dock-btn ${panel === 'controls' ? 'active' : ''}`}
+            onClick={() => togglePanel('controls')}
             title="Controls (C)"
             aria-label="Toggle controls"
-            aria-expanded={panelOpen}
+            aria-expanded={panel === 'controls'}
           >
             <Icon name="sliders" size={14} />
           </button>
         )}
         {track && (
-          <button className="dock-btn" onClick={() => setFont((f) => (f === 'sans' ? 'serif' : 'sans'))} aria-label="Toggle lyric font">
+          <button
+            className="dock-btn"
+            onClick={() => updateSettings({ lyricFont: settings.lyricFont === 'sans' ? 'serif' : 'sans' })}
+            title="Lyric font"
+            aria-label="Toggle lyric font"
+          >
             Aa
           </button>
         )}
+        <button
+          className={`dock-btn ${panel === 'settings' ? 'active' : ''}`}
+          onClick={() => togglePanel('settings')}
+          title="Settings (S)"
+          aria-label="Toggle settings"
+          aria-expanded={panel === 'settings'}
+        >
+          <Icon name="gear" size={14} />
+        </button>
         <button className="dock-btn" onClick={toggleFullscreen} title="Fullscreen (F)" aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}>
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             {isFullscreen ? <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /> : <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />}

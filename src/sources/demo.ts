@@ -3,14 +3,14 @@ import { EMPTY_STATE, Emitter, type PlayerSource, type PlayerState, type QueueEn
 
 /** Open the app with ?demo to preview the look without audio, keys or network. */
 const DEMO_LRC = `
-[00:02.00] I was left to cry out all alone
-[00:06.00] Call out my name, call out my name
-[00:10.00] When you held me close to stay
-[00:14.00] So gently I made you stay
-[00:18.00] Sure I want you to call
-[00:22.00] Out my name when you're gone
-[00:26.00] I was left to cry out all alone
-[00:30.00] Call out my name, call out my name
+[00:02.00] Neon fades across the quiet room
+[00:06.00] Every star is spelling out your name
+[00:10.00] Hold the night a little longer
+[00:14.00] Gold and ember in the afterglow
+[00:18.00] Stay until the city falls asleep
+[00:22.00] Silver light is dancing on the walls
+[00:26.00] Neon fades across the quiet room
+[00:30.00] Every star is spelling out your name
 `
 
 export const demoLyrics: Lyrics | null = parseLrc(DEMO_LRC)
@@ -42,7 +42,7 @@ export class DemoSource implements PlayerSource {
   private emitter = new Emitter()
   private track: Track = {
     id: 'demo',
-    title: 'Call Out My Name',
+    title: 'Afterglow',
     artist: 'Demo Artist',
     album: 'Demo',
     artUrl: makeArt(),
@@ -102,8 +102,8 @@ export class DemoSource implements PlayerSource {
 
   async getQueue(): Promise<QueueEntry[]> {
     return [
-      { key: 'd1', title: 'Wasted Times', artist: 'Demo Artist', artUrl: this.track.artUrl },
-      { key: 'd2', title: 'Privilege', artist: 'Demo Artist', artUrl: this.track.artUrl },
+      { key: 'd1', title: 'Night Drive', artist: 'Demo Artist', artUrl: this.track.artUrl },
+      { key: 'd2', title: 'Ember', artist: 'Demo Artist', artUrl: this.track.artUrl },
     ]
   }
 

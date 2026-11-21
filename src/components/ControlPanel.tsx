@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { usePosition } from '../hooks/usePlayer'
-import type { LyricColorMode } from '../lyrics/colors'
 import { SpotifySource } from '../sources/spotify'
 import type { PlayerSource, PlayerState, QueueEntry, RepeatMode } from '../sources/types'
 import { Icon } from './icons'
@@ -9,10 +8,6 @@ interface Props {
   source: PlayerSource
   state: PlayerState
   onClose: () => void
-  showMini: boolean
-  onShowMini: (on: boolean) => void
-  lyricColor: LyricColorMode
-  onLyricColor: (mode: LyricColorMode) => void
 }
 
 /** Filled share of a range input, for the CSS track gradient. */
@@ -26,7 +21,7 @@ function fmt(ms: number) {
 }
 
 /** Pop-up glass panel with everything the clean main screen hides. */
-export function ControlPanel({ source, state, onClose, showMini, onShowMini, lyricColor, onLyricColor }: Props) {
+export function ControlPanel({ source, state, onClose }: Props) {
   const { track, isPlaying, shuffle, repeat, volume } = state
   const pos = usePosition(source, 500)
   const [queue, setQueue] = useState<QueueEntry[] | null>(null)
@@ -174,22 +169,6 @@ export function ControlPanel({ source, state, onClose, showMini, onShowMini, lyr
         ))}
       </ul>
 
-      <div className="setting-row">
-        <span>Lyric colour</span>
-        <div className="segmented" role="radiogroup" aria-label="Lyric colour">
-          {(['match', 'contrast'] as const).map((m) => (
-            <button key={m} role="radio" aria-checked={lyricColor === m} className={lyricColor === m ? 'on' : ''} onClick={() => onLyricColor(m)}>
-              {m === 'match' ? 'Match' : 'Contrast'}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <label className="switch-row">
-        <span>Mini controls on screen</span>
-        <input type="checkbox" checked={showMini} onChange={(e) => onShowMini(e.target.checked)} />
-        <span className="switch" aria-hidden />
-      </label>
     </div>
   )
 }
