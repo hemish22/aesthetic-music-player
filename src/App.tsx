@@ -23,6 +23,7 @@ import { LocalSource } from './sources/local'
 import { SpotifySource } from './sources/spotify'
 import type { PlayerSource } from './sources/types'
 import { useSettings } from './settings'
+import { setFrameRate } from './frameClock'
 
 type View = 'now' | 'lyrics'
 type Panel = 'controls' | 'settings' | null
@@ -34,6 +35,7 @@ export default function App() {
   const [source, setSource] = useState<PlayerSource | null>(() => (isDemo ? new DemoSource() : null))
   const [view, setView] = useState<View>(startView)
   const [settings, updateSettings, resetSettings] = useSettings()
+  useEffect(() => setFrameRate(settings.frameRate), [settings.frameRate])
   const [lyrics, setLyrics] = useState<Lyrics | null>(isDemo ? demoLyrics : null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -200,6 +202,10 @@ export default function App() {
               activeSize={settings.activeSize}
               glow={settings.lyricGlow}
               linesPerGroup={settings.linesPerGroup}
+              driftSpeed={settings.driftSpeed}
+              driftDistance={settings.driftDistance}
+              visible={view === 'lyrics'}
+              resolution={settings.lyricResolution}
             />
             {lyrics === null && <p className="no-lyrics">no synced lyrics for this track</p>}
           </section>

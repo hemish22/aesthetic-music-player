@@ -141,6 +141,25 @@ export function SettingsPanel({ settings: s, update, reset, onClose }: Props) {
           ]}
           onChange={(v) => update({ linesPerGroup: v })}
         />
+        <Slider
+          label="Drift speed"
+          value={s.driftSpeed}
+          min={0}
+          max={3}
+          step={0.1}
+          format={(v) => (v === 0 ? 'Still' : `${v.toFixed(1)}×`)}
+          onChange={(v) => update({ driftSpeed: v })}
+        />
+        <Slider
+          label="Drift distance"
+          value={s.driftDistance}
+          min={0}
+          max={60}
+          step={1}
+          format={(v) => (v === 0 ? 'Still' : px(v))}
+          disabled={s.driftSpeed === 0}
+          onChange={(v) => update({ driftDistance: v })}
+        />
       </Section>
 
       <Section title="Background">
@@ -190,6 +209,30 @@ export function SettingsPanel({ settings: s, update, reset, onClose }: Props) {
         />
         <Toggle label="Cursor glow" checked={s.cursorGlow} onChange={(v) => update({ cursorGlow: v })} />
         <Toggle label="Mini controls on screen" checked={s.miniControls} onChange={(v) => update({ miniControls: v })} />
+      </Section>
+
+      <Section title="Performance">
+        <Choice
+          label="Frame rate"
+          value={s.frameRate}
+          options={[
+            { value: 30, label: '30' },
+            { value: 60, label: '60' },
+            { value: 0, label: 'Max' },
+          ]}
+          onChange={(v) => update({ frameRate: v })}
+        />
+        <Choice
+          label="Lyrics sharpness"
+          value={s.lyricResolution}
+          options={[
+            { value: 1, label: 'Low' },
+            { value: 1.5, label: 'Mid' },
+            { value: 2, label: 'High' },
+          ]}
+          onChange={(v) => update({ lyricResolution: v })}
+        />
+        <p className="settings-hint">30 fps saves the most battery. Max follows your screen (120Hz on a MacBook) and is the heaviest.</p>
       </Section>
 
       <button

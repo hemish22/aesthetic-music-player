@@ -25,6 +25,10 @@ export interface Settings {
   lyricGlow: number
   /** How many lyric lines share one constellation. */
   linesPerGroup: 1 | 2 | 3
+  /** 0..3 speed of the lyric sway/drift (1 = default pace); 0 holds them still. */
+  driftSpeed: number
+  /** px how far lyrics wander from their resting place. */
+  driftDistance: number
 
   // Clock
   showTime: boolean
@@ -41,6 +45,12 @@ export interface Settings {
   edgeLength: number
   cursorGlow: boolean
   miniControls: boolean
+
+  // Performance
+  /** Max repaints per second for all animation; 0 = match the display (heaviest). */
+  frameRate: 30 | 60 | 0
+  /** Lyric canvas pixels per CSS pixel (capped at the screen's own density). */
+  lyricResolution: 1 | 1.5 | 2
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -55,6 +65,8 @@ export const DEFAULT_SETTINGS: Settings = {
   lyricFont: 'sans',
   lyricGlow: 1,
   linesPerGroup: 2,
+  driftSpeed: 1,
+  driftDistance: 14,
   showTime: true,
   showDate: true,
   hour12: false,
@@ -64,6 +76,8 @@ export const DEFAULT_SETTINGS: Settings = {
   edgeLength: 0.09,
   cursorGlow: true,
   miniControls: true,
+  frameRate: 60,
+  lyricResolution: 2,
 }
 
 const KEY = 'aesthetic-settings'

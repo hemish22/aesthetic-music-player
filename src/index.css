@@ -124,21 +124,23 @@ button {
     transform: translate(10vmax, -6vmax) scale(0.9);
   }
 }
+/* whole-pixel offsets (multiples of 5, so every steps(5) frame is an integer too): a fractional
+   offset would smear the 1px grain and make it pulse */
 @keyframes grain {
   0% {
     transform: translate(0, 0);
   }
   25% {
-    transform: translate(-3%, 4%);
+    transform: translate(-35px, 45px);
   }
   50% {
-    transform: translate(4%, -2%);
+    transform: translate(45px, -20px);
   }
   75% {
-    transform: translate(-2%, -4%);
+    transform: translate(-20px, -45px);
   }
   100% {
-    transform: translate(3%, 3%);
+    transform: translate(35px, 35px);
   }
 }
 
@@ -670,7 +672,9 @@ button {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260'><filter id='s'><feTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='2' seed='7'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 0.42  0 0 0 0 0.08  0 0 0 7 -4.1'/></filter><rect width='100%' height='100%' filter='url(%23s)'/></svg>");
   background-size: 390px;
   will-change: transform;
-  animation: spray-drift 40s linear infinite;
+  /* 1px jumps, never in between: a sub-pixel offset smears each dot across pixels and it
+     pulses as it crosses pixel edges (that read as flicker). 390 steps = 390px. */
+  animation: spray-drift 40s steps(390) infinite;
 }
 @keyframes spray-drift {
   to {
@@ -698,7 +702,8 @@ button {
   background-size: 300px;
   opacity: calc(0.6 * var(--specks-boost, 1));
   will-change: transform;
-  animation: dust-drift 45s linear infinite;
+  /* whole-pixel steps, see .spray-noise */
+  animation: dust-drift 45s steps(300) infinite;
 }
 @keyframes dust-drift {
   to {
@@ -1057,6 +1062,12 @@ button {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   opacity: 0.6;
+}
+.settings-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  opacity: 0.5;
 }
 .settings-section .switch-row,
 .settings-section .setting-row {

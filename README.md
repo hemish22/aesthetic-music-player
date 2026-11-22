@@ -17,7 +17,7 @@ Plays **Spotify** (Premium, in the browser via the Web Playback SDK) or **local 
 ## Features
 
 - **Album-art glow**: the background colours come from the current cover and crossfade between tracks.
-- **Lyrics as a constellation**: each sung word becomes a glowing star joined to its neighbours; the word being sung grows, rings and glows. Synced lyrics come from [LRCLIB](https://lrclib.net).
+- **Lyrics as a constellation**: each sung word becomes a glowing star joined to its neighbours; the word being sung grows, rings and glows, and the whole constellation gently sways and drifts. Synced lyrics come from [LRCLIB](https://lrclib.net).
 - **Monochrome cover backdrop** in lyrics view: the cover fills the screen, tinted with its own colour, with soft focus, drifting orange specks and film scratches.
 - **Match / Contrast lyric colour**: warm gold, or a silvery shade of the cover's opposite hue so lyrics stand out.
 - **Travelling edge glow**: a gold light that circles the screen border.
@@ -77,10 +77,11 @@ Click **Choose local files** or drop audio files (mp3, m4a, flac, wav, ogg, aac)
 
 | Section | Options |
 |---|---|
-| Lyrics | word size, sung-word size, glow strength, colour (Match / Contrast), font (Sans / Serif), lines per constellation |
+| Lyrics | word size, sung-word size, glow strength, colour (Match / Contrast), font (Sans / Serif), lines per constellation, drift speed, drift distance |
 | Background | album art strength, dotted effect strength, soft focus, film scratches, glow behind clock |
 | Clock | show time, show date, 24h / 12h, size |
 | Effects | edge glow on/off, lap time, length, cursor glow, mini controls |
+| Performance | frame rate (30 / 60 / Max), lyrics sharpness |
 
 ## How it works
 
@@ -96,7 +97,9 @@ The lyrics view was tuned on a 2× Retina MacBook panel, where stacking many ful
 
 - no `mix-blend-mode` or live CSS `filter` on full-screen layers; the cover's tint, tone curve and blur are baked into images once per track (`src/hooks/useDuotone.ts`);
 - animate only `transform` / `opacity`, on layers no bigger than needed (the edge glow is four thin strips, not a rotating full-screen gradient);
-- fully stop rendering layers that are hidden.
+- fully stop rendering layers that are hidden (the lyrics canvas stops and frees its memory in player view).
+
+On a 120Hz screen the browser repaints every layer on every refresh while anything animates, and that repainting was most of the GPU load. So all ambient motion runs on one shared clock (`src/frameClock.ts`): the lyrics canvas, the cursor glow and every looping CSS / edge-glow animation are paused and stepped together at the chosen frame rate (60 by default), giving one repaint per tick instead of 120. Measured CPU + GPU on a MacBook panel, lyrics view: about 73% at Max, 47% at 60 fps, 33% at 30 fps.
 
 ## Privacy
 

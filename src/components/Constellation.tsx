@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { MATCH_COLORS, rgba, type LyricColors, type RGB } from '../lyrics/colors'
 import { locate, type Lyrics } from '../lyrics/lrclib'
+import { onFrame } from '../frameClock'
 
 interface Props {
   lyrics: Lyrics | null
@@ -14,6 +15,14 @@ interface Props {
   /** 0..1.5 glow strength */
   glow: number
   linesPerGroup: number
+  /** 0..3 sway speed multiplier; 0 = still */
+  driftSpeed: number
+  /** px how far words wander from their resting place */
+  driftDistance: number
+  /** false while the lyrics view is hidden: the render loop stops entirely */
+  visible: boolean
+  /** canvas pixels per CSS pixel, capped at the screen's devicePixelRatio */
+  resolution: number
 }
 
 interface Node {
@@ -22,11 +31,19 @@ interface Node {
   endMs: number
   x: number // 0..1 within the drawing area
   y: number
+  /** per-word sway: phases and frequencies (rad/s) for x and y */
+  phx: number
+  phy: number
+  fx: number
+  fy: number
 }
 
 interface Graph {
   nodes: Node[]
   edges: [number, number][]
+  /** phases of the slow whole-constellation drift */
+  gx: number
+  gy: number
 }
 
 const FADE_MS = 700
@@ -45,6 +62,9 @@ function mulberry32(seed: number) {
 /** Deterministic layout for a group of lines, so seeking always reproduces the same constellation. */
 function buildGraph(lyrics: Lyrics, group: number, linesPerGroup: number): Graph {
   const rand = mulberry32(group * 7919 + 13)
+  // Separate stream for motion, so adding sway didn't change any layout.
+  const sway = mulberry32(group * 104729 + 7)
+  const TAU = Math.PI * 2
   const words = lyrics.lines.slice(group * linesPerGroup, (group + 1) * linesPerGroup).flatMap((l) => l.words)
   const n = words.length
   const nodes: Node[] = []
@@ -54,12 +74,22 @@ function buildGraph(lyrics: Lyrics, group: number, linesPerGroup: number): Graph
     // Walk left→right so reading order is preserved, wandering vertically.
     // Mean-reverting so the shape wanders around the middle instead of sticking to an edge.
     y = Math.min(0.95, Math.max(0.05, 0.5 + (y - 0.5) * 0.5 + (rand() - 0.5) * 0.8))
-    nodes.push({ word: w.text, startMs: w.startMs, endMs: w.endMs, x: (k + 0.5) / n + (rand() - 0.5) * (0.6 / n), y })
+    nodes.push({
+      word: w.text,
+      startMs: w.startMs,
+      endMs: w.endMs,
+      x: (k + 0.5) / n + (rand() - 0.5) * (0.6 / n),
+      y,
+      phx: sway() * TAU,
+      phy: sway() * TAU,
+      fx: 0.55 + sway() * 0.45,
+      fy: 0.5 + sway() * 0.45,
+    })
     if (k > 0) edges.push([k - 1, k])
     if (k > 1 && rand() < 0.55) edges.push([k - 2, k])
     if (k > 2 && rand() < 0.3) edges.push([k - 3, k])
   })
-  return { nodes, edges }
+  return { nodes, edges, gx: sway() * TAU, gy: sway() * TAU }
 }
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
@@ -75,17 +105,17 @@ function sparkle(ctx: CanvasRenderingContext2D, x: number, y: number, s: number)
 }
 
 /** Lyrics drawn as a star map: each sung word becomes a glowing node linked to its neighbours. */
-export function Constellation({ lyrics, getPosition, font, colors, wordSize, activeSize, glow, linesPerGroup }: Props) {
+export function Constellation({ lyrics, getPosition, font, colors, wordSize, activeSize, glow, linesPerGroup, driftSpeed, driftDistance, visible, resolution }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fontRef = useRef(font)
   useEffect(() => {
     fontRef.current = font
   }, [font])
   // Live-tunable values read every frame (no canvas rebuild when sliders move).
-  const look = useRef({ wordSize, activeSize, glow })
+  const look = useRef({ wordSize, activeSize, glow, driftSpeed, driftDistance })
   useEffect(() => {
-    look.current = { wordSize, activeSize, glow }
-  }, [wordSize, activeSize, glow])
+    look.current = { wordSize, activeSize, glow, driftSpeed, driftDistance }
+  }, [wordSize, activeSize, glow, driftSpeed, driftDistance])
   const colorsRef = useRef(colors)
   useEffect(() => {
     colorsRef.current = colors
@@ -94,12 +124,16 @@ export function Constellation({ lyrics, getPosition, font, colors, wordSize, act
   useEffect(() => {
     const canvas = canvasRef.current!
     const ctx = canvas.getContext('2d')!
+    if (!visible) {
+      // Free the (large) backing store while hidden.
+      canvas.width = canvas.height = 0
+      return
+    }
     let w = 0
     let h = 0
-    let raf = 0
 
     const resize = () => {
-      const dpr = window.devicePixelRatio || 1
+      const dpr = Math.min(window.devicePixelRatio || 1, resolution)
       w = canvas.clientWidth
       h = canvas.clientHeight
       canvas.width = w * dpr
@@ -139,13 +173,28 @@ export function Constellation({ lyrics, getPosition, font, colors, wordSize, act
     let previous = -1
     let switchedAt = 0
 
+    // Sway clock in seconds. Advanced by dt × speed, so changing speed never makes words jump.
+    let clock = 0
+    let lastTick = performance.now()
+    const tick = () => {
+      const now = performance.now()
+      // cap dt so a backgrounded tab doesn't lurch when it comes back
+      clock += (Math.min(100, now - lastTick) / 1000) * look.current.driftSpeed
+      lastTick = now
+    }
+
     const drawGraph = (graph: Graph, pos: number, alpha: number) => {
       // wide spread so the larger words don't collide
       const padX = Math.max(60, w * 0.08)
       const top = h * 0.34
       const area = h * 0.5
-      const px = (n: Node) => padX + n.x * (w - padX * 2)
-      const py = (n: Node) => top + n.y * area
+      // Slow drift of the whole constellation plus a gentle per-word sway on top,
+      // so the shape floats and its lines softly stretch.
+      const d = look.current.driftDistance
+      const gX = d * 0.6 * Math.sin(clock * 0.31 + graph.gx)
+      const gY = d * 0.6 * Math.cos(clock * 0.23 + graph.gy)
+      const px = (n: Node) => padX + n.x * (w - padX * 2) + gX + d * 0.45 * Math.sin(clock * n.fx + n.phx)
+      const py = (n: Node) => top + n.y * area + gY + d * 0.45 * Math.sin(clock * n.fy + n.phy)
       const sans = fontRef.current === 'sans'
 
       ctx.lineCap = 'round'
@@ -233,9 +282,11 @@ export function Constellation({ lyrics, getPosition, font, colors, wordSize, act
       ctx.shadowBlur = 0
     }
 
+    // Paced by the shared frame clock (Settings → Performance → Frame rate).
     const frame = () => {
       ctx.clearRect(0, 0, w, h)
       ease()
+      tick()
       if (lyrics) {
         const pos = getPosition()
         const { line } = locate(lyrics, pos)
@@ -254,15 +305,14 @@ export function Constellation({ lyrics, getPosition, font, colors, wordSize, act
           if (cur) drawGraph(cur, pos, 1)
         }
       }
-      raf = requestAnimationFrame(frame)
     }
-    raf = requestAnimationFrame(frame)
+    const stop = onFrame(frame)
 
     return () => {
-      cancelAnimationFrame(raf)
+      stop()
       ro.disconnect()
     }
-  }, [lyrics, getPosition, linesPerGroup])
+  }, [lyrics, getPosition, linesPerGroup, visible, resolution])
 
   return <canvas ref={canvasRef} className="constellation" />
 }
